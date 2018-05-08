@@ -10,6 +10,7 @@ branches:
   only:
   - master
   - /^[0-9.]+-releases$/
+  - /^jr-electron-[0-9.]+$/
 
 platform:
   - x64
@@ -22,7 +23,6 @@ environment:
     NODE_VERSION: 6.9.4
 
   matrix:
-  - TASK: test
   - TASK: installer
 
 matrix:
@@ -46,8 +46,10 @@ build_script:
         ECHO Building on release branch - Creating production artifacts &&
         script\build.cmd --code-sign --compress-artifacts --create-windows-installer
       ) ELSE (
-        IF [%APPVEYOR_REPO_BRANCH%]==[master] IF NOT DEFINED APPVEYOR_PULL_REQUEST_NUMBER (
-          ECHO Building on master branch - Creating signed zips &&
+        IF [%APPVEYOR_REPO_BRANCH%]==[master] IF NOT DEFINED APPVEYOR_PULL_REQUEST_NUMBER SET CREATE_SIGNED_ZIPS=true
+        IF [%APPVEYOR_REPO_BRANCH:~0,12%]==[jr-electron] SET CREATE_SIGNED_ZIPS=true
+        IF DEFINED CREATE_SIGNED_ZIPS (
+          ECHO Building on %APPVEYOR_REPO_BRANCH% branch - Creating signed zips &&
           script\build.cmd --code-sign --compress-artifacts
         ) ELSE (
           ECHO Skipping installer build for non-release/non-master branch
