@@ -30,7 +30,7 @@ module.exports = function () {
     'out': CONFIG.buildOutputPath,
     'overwrite': true,
     'platform': process.platform,
-    'version': CONFIG.appMetadata.electronVersion,
+    'electronVersion': CONFIG.appMetadata.electronVersion,
     'version-string': {
       'CompanyName': 'GitHub, Inc.',
       'FileDescription': 'Atom',

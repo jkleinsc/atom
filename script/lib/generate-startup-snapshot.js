@@ -3,6 +3,20 @@ const fs = require('fs')
 const path = require('path')
 const electronLink = require('electron-link')
 const CONFIG = require('../config')
+const request = require('request')
+
+function copyStartupBlob (packagedAppPath, generatedStartupBlobPath) {
+  let startupBlobDestinationPath
+  if (process.platform === 'darwin') {
+    startupBlobDestinationPath = `${packagedAppPath}/Contents/Frameworks/Electron Framework.framework/Resources/snapshot_blob.bin`
+  } else {
+    startupBlobDestinationPath = path.join(packagedAppPath, 'snapshot_blob.bin')
+  }
+
+  console.log(`Moving generated startup blob into "${startupBlobDestinationPath}"`)
+  fs.unlinkSync(startupBlobDestinationPath)
+  fs.renameSync(generatedStartupBlobPath, startupBlobDestinationPath)
+}
 
 module.exports = function (packagedAppPath) {
   const snapshotScriptPath = path.join(CONFIG.buildOutputPath, 'startup.js')
@@ -89,20 +103,30 @@ module.exports = function (packagedAppPath) {
 
     const generatedStartupBlobPath = path.join(CONFIG.buildOutputPath, 'snapshot_blob.bin')
     console.log(`Generating startup blob at "${generatedStartupBlobPath}"`)
-    childProcess.execFileSync(
-      path.join(CONFIG.repositoryRootPath, 'script', 'node_modules', 'electron-mksnapshot', 'bin', 'mksnapshot'),
-      ['--no-use_ic', snapshotScriptPath, '--startup_blob', generatedStartupBlobPath]
-    )
-
-    let startupBlobDestinationPath
-    if (process.platform === 'darwin') {
-      startupBlobDestinationPath = `${packagedAppPath}/Contents/Frameworks/Electron Framework.framework/Resources/snapshot_blob.bin`
+    if (process.arch === 'arm64') {
+      console.log(`Getting startup blob for arm64 from snapshot service.`)
+      const formData = {
+        version: '2.0.0',
+        jsfile: fs.createReadStream(snapshotScriptPath)
+      }
+      const writeStream = fs.createWriteStream(generatedStartupBlobPath)
+      writeStream.on('close', () => {
+        console.log(`Done getting startup blob for arm64 from snapshot service.`)
+        copyStartupBlob(packagedAppPath, generatedStartupBlobPath)
+      })
+      request.post({url: `https://electron-snapshot-service.herokuapp.com/mksnaparm64`, formData: formData})
+        .on('response', (response) => {
+          if (response.statusCode !== 200) {
+            console.log(`Error calling snapshot service`, response.statusMessage)
+          }
+        })
+        .pipe(writeStream)
     } else {
-      startupBlobDestinationPath = path.join(packagedAppPath, 'snapshot_blob.bin')
+      childProcess.execFileSync(
+        path.join(CONFIG.repositoryRootPath, 'script', 'node_modules', 'electron-mksnapshot', 'bin', 'mksnapshot'),
+        ['--no-use_ic', snapshotScriptPath, '--startup_blob', generatedStartupBlobPath]
+      )
+      copyStartupBlob(packagedAppPath, generatedStartupBlobPath)
     }
-
-    console.log(`Moving generated startup blob into "${startupBlobDestinationPath}"`)
-    fs.unlinkSync(startupBlobDestinationPath)
-    fs.renameSync(generatedStartupBlobPath, startupBlobDestinationPath)
   })
 }
