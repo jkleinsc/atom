@@ -18,6 +18,28 @@ function copyStartupBlob (packagedAppPath, generatedStartupBlobPath) {
   fs.renameSync(generatedStartupBlobPath, startupBlobDestinationPath)
 }
 
+function getArm64StartupBlob (snapshotScriptPath, generatedStartupBlobPath) {
+  return new Promise((resolve, reject) => {
+    console.log(`Getting startup blob for arm64 from snapshot service.`)
+    const formData = {
+      version: '2.0.0',
+      jsfile: fs.createReadStream(snapshotScriptPath)
+    }
+    const writeStream = fs.createWriteStream(generatedStartupBlobPath)
+    writeStream.on('close', () => {
+      resolve()
+    })
+    request.post({url: `https://electron-snapshot-service.herokuapp.com/mksnaparm64`, formData: formData})
+      .on('response', (response) => {
+        if (response.statusCode !== 200) {
+          console.log(`Error calling snapshot service`, response.statusMessage)
+          reject(new Error(`Error calling snapshot service: ${response.statusMessage}`))
+        }
+      })
+      .pipe(writeStream)
+  })
+}
+
 module.exports = function (packagedAppPath) {
   const snapshotScriptPath = path.join(CONFIG.buildOutputPath, 'startup.js')
   const coreModules = new Set(['electron', 'atom', 'shell', 'WNdb', 'lapack', 'remote'])
@@ -105,22 +127,10 @@ module.exports = function (packagedAppPath) {
     console.log(`Generating startup blob at "${generatedStartupBlobPath}"`)
     if (process.arch === 'arm64') {
       console.log(`Getting startup blob for arm64 from snapshot service.`)
-      const formData = {
-        version: '2.0.0',
-        jsfile: fs.createReadStream(snapshotScriptPath)
-      }
-      const writeStream = fs.createWriteStream(generatedStartupBlobPath)
-      writeStream.on('close', () => {
+      getArm64StartupBlob(snapshotScriptPath, generatedStartupBlobPath).then(() => {
         console.log(`Done getting startup blob for arm64 from snapshot service.`)
         copyStartupBlob(packagedAppPath, generatedStartupBlobPath)
       })
-      request.post({url: `https://electron-snapshot-service.herokuapp.com/mksnaparm64`, formData: formData})
-        .on('response', (response) => {
-          if (response.statusCode !== 200) {
-            console.log(`Error calling snapshot service`, response.statusMessage)
-          }
-        })
-        .pipe(writeStream)
     } else {
       childProcess.execFileSync(
         path.join(CONFIG.repositoryRootPath, 'script', 'node_modules', 'electron-mksnapshot', 'bin', 'mksnapshot'),
