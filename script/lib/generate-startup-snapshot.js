@@ -127,7 +127,7 @@ module.exports = function (packagedAppPath) {
     console.log(`Generating startup blob at "${generatedStartupBlobPath}"`)
     if (process.arch === 'arm64') {
       console.log(`Getting startup blob for arm64 from snapshot service.`)
-      getArm64StartupBlob(snapshotScriptPath, generatedStartupBlobPath).then(() => {
+      return getArm64StartupBlob(snapshotScriptPath, generatedStartupBlobPath).then(() => {
         console.log(`Done getting startup blob for arm64 from snapshot service.`)
         copyStartupBlob(packagedAppPath, generatedStartupBlobPath)
       })
